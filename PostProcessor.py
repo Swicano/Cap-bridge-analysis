@@ -18,7 +18,7 @@ avdCapPFA = 1
 avdLossA = 2
 avdVoltA = 3
 avdTimeA = 4
-avdFreqS = 5    # in the averaged array, thr FREQuency Standarddeviation is column 5
+avdFreqS = 5    # in the averaged array, the FREQuency Standarddeviation is column 5
 avdCapPFS = 6
 avdLossS = 7
 avdVoltS = 8
@@ -57,14 +57,9 @@ ImpedanceReal = resist/(1+capFar**2*resist**2*freqOmega**2)
 ImpedanceImag = (capFar*resist**2*freqOmega)/(1+capFar**2*resist**2*freqOmega**2)
 ImpedanceMag = (ImpedanceReal**2+ImpedanceImag**2)**.5
 
-
-
-
 # if YES averaged
 freqOmegaAvg = avgedinput[:,avdFreqA]*2*np.pi
 capFarAvg = avgedinput[:,avdCapPFA]*10**(-12)	
-
-
 
 resistAvg = 1 / (freqOmegaAvg * capFarAvg * avgedinput[:,avdLossA])
 ImpedanceRealAvg = resistAvg/(1+capFarAvg**2*resistAvg**2*freqOmegaAvg**2)
@@ -78,3 +73,12 @@ ImpedanceRealStd = ((4*capFarAvg**2*(avgedinput[:,avdCapPFS]*10**(-12))**2*resis
 ImpedanceImagStd = ((resistAvg**2*freqOmegaAvg**2*((avgedinput[:,avdCapPFS]*10**(-12))**2*resistAvg**2+capFarAvg**4*(avgedinput[:,avdCapPFS]*10**(-12))**2*resistAvg**6*freqOmegaAvg**4+capFarAvg**2*(4*resistStd**2-2*(avgedinput[:,avdCapPFS]*10**(-12))**2*resistAvg**4*freqOmegaAvg**2)))/(1+capFarAvg**2*resistAvg**2*freqOmegaAvg**2)**4)**.5
 
 ImpedanceMagStd = ((ImpedanceImagStd*ImpedanceImagAvg**2)/(ImpedanceImagAvg**2+ImpedanceRealAvg**2)+(ImpedanceRealStd**2*ImpedanceRealAvg**2)/(ImpedanceImagAvg**2+ImpedanceRealAvg**2))**0.5
+
+# Step Four we now want to estimate the initial parameters of the circle from the first 3 points.
+
+
+
+
+
+
+
