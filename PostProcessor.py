@@ -28,7 +28,7 @@ avdTimeS = 9
 # Step One: find an input file name somehow____________________________________________________________________________________________
 
 # The File name hardcoded (for testing)
-fname = r"C:\Users\gfirest\Documents\GitHub\Cap-bridge-analysis\testdata\2700A S2 NtN9 50 Bare Electrode R1 100oC Heating 03-18-2019.txt"
+fname = r"C:\Users\gfirest\Documents\GitHub\Cap-bridge-analysis\testdata\2700A S1 NtN1 50 After silane treatment 1 Bare Electrode R1 140oC Heating 02-09-2019.txt"
 
 # Step Two: read the file into a numpy array___________________________________________________________________________________________
 
@@ -74,10 +74,38 @@ ImpedanceImagStd = ((resistAvg**2*freqOmegaAvg**2*((avgedinput[:,avdCapPFS]*10**
 
 ImpedanceMagStd = ((ImpedanceImagStd*ImpedanceImagAvg**2)/(ImpedanceImagAvg**2+ImpedanceRealAvg**2)+(ImpedanceRealStd**2*ImpedanceRealAvg**2)/(ImpedanceImagAvg**2+ImpedanceRealAvg**2))**0.5
 
-# Step Four we now want to estimate the initial parameters of the circle from the first 3 points.
+# Step Four we now want to estimate the initial parameters of the circle from just the first 3 points.
 
+xin3 = ImpedanceRealAvg[:3]
+yin3 = ImpedanceImagAvg[:3]
+par0 = np.array([1,2,3], dtype=np.float64)
 
+    # y0 initial guess
+par0[0] = ((-xin3[0] + xin3[2])* (-xin3[0]**2 + xin3[1]**2 - yin3[0]**2 + yin3[1]**2) + (xin3[0] - xin3[1])* (-xin3[0]**2 + xin3[2]**2 - yin3[0]**2 + yin3[2]**2))/(2 *((-xin3[0] + xin3[2])* (-yin3[0] + yin3[1]) - (-xin3[0] + xin3[1])* (-yin3[0] + yin3[2])))
+    # x0 initial guess
+par0[1] = (xin3[0]**2 - xin3[1]**2 - 2* yob* yin3[0] + yin3[0]**2 + 2* yob *yin3[1] - yin3[1]**2)/(2* (xin3[0] - xin3[1]))
+    # r^2 initial guess
+par0[2] = (-xob + xin3[0])**2 + (-yob + yin3[0])**2
 
+# Step Five we want to create the various functions to pass into scipy adapted from https://docs.scipy.org/doc/scipy/reference/tutorial/optimize.html
+
+def model(x, u):
+    return x[0] + (-(u - x[1])**2 + x[2])**0.5
+
+def fun(x, u, y):
+    return model(x, u) - y
+
+def jac(x, u, y):
+    J = np.empty((u.size, x.size))
+    J[:, 0] = 1.
+    J[:, 1] = (1.* (u - x[1]))/(-(u - x[1])**2 + x[2])**0.5
+    J[:, 2] = 0.5/(-(u - x[1])**2 + x[2])**0.5
+    return J
+
+#u = ImpedanceRealAvg
+#y = ImpedanceImagAvg
+#x0 = par0
+res = least_squares(fun, par0, jac=jac, args=(ImpedanceRealAvg, ImpedanceImagAvg), verbose=1)
 
 
 
