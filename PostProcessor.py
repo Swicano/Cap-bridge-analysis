@@ -4,9 +4,10 @@
 import argparse
 import numpy as np
 import datetime
-import matplotlib.pyplot as plt
 from scipy.optimize import least_squares
 import os
+
+
 
 # the input and output directory paths
 pathOut = os.getcwd()+'\\Output\\'
@@ -57,6 +58,12 @@ for fstring in inputfiles:
     # The File name hardcoded (for testing)
     #fname = "C:\\Users\\gfirest\\Documents\\GitHub\\Cap-bridge-analysis\\testdata\\2700A S1 NtN1 50 After silane treatment 1 Bare Electrode R1 120oC Heating 02-09-2019.txt"
     fname = pathIn+fstring
+    fOutname = pathOut+'OUTPUT '+fstring
+    
+    #check if the output file already exists, if it does we assume that the input file has already been run and skip it 
+    if os.path.isfile(fOutname):
+        continue
+    
     # Step Two: read the file into a numpy array_________________________________________________________________________________________
     
     # quite possibly the worst converter function ever made. decodes the timestamp format from labview to unix time in seconds
@@ -140,34 +147,71 @@ for fstring in inputfiles:
     #u = ImpedanceRealAvg
     #y = ImpedanceImagAvg
     #x0 = par0
-    res = least_squares(fun, par0, jac=jac, args=(ImpedanceRealAvg, ImpedanceImagAvg), verbose=0)
+    res = least_squares(fun, par0, jac=jac, args=(ImpedanceRealAvg, ImpedanceImagAvg), verbose=0) # this does the actual fitting
     pcov = [' ']*(len(res.x)) 
     cond = 1/(res.x[1]+(res.x[2]-res.x[0]**2)**.5)
     dcond = ' '
     
-    output = [' ']*(len(res.x)+len(pcov)+5)
-    output[0] = fname.rsplit('\\',1)[1]
-    output[1:6:2] = [str(i) for i in res.x]
-    output[2:7:2] = [str(i) for i in pcov]
-    output[7] = str(cond)
-    output[8] = str(dcond)
-    output.extend(fname.rsplit('\\',1)[1].split('.',1)[0].split())
+    # Step Six, format everything to do the outputting
+    # First we format to output the results
+    outRes = [' ']*(len(res.x)+len(pcov)+5)
+    outRes[0] = fname.rsplit('\\',1)[1]
+    outRes[1:6:2] = [str(i) for i in res.x]
+    outRes[2:7:2] = [str(i) for i in pcov]
+    outRes[7] = str(cond)
+    outRes[8] = str(dcond)
+    outRes.extend(fname.rsplit('\\',1)[1].split('.',1)[0].split())
     
     with open(pathResults, "a") as results:
-        results.write(" \t ".join(output)+'\n')
+        results.write(" \t ".join(outRes)+'\n')
+        
+    #  then we output the modified input file (with averages calculated)
+    outArr = np.empty((len(freqOmegaAvg),20))
+    outArr[:,0] = avgedinput[:,avdFreqA]
+    outArr[:,1] = avgedinput[:,avdFreqS]
+    outArr[:,2] = avgedinput[:,avdCapPFA]
+    outArr[:,3] = avgedinput[:,avdCapPFS]
+    outArr[:,4] = avgedinput[:,avdLossA]
+    outArr[:,5] = avgedinput[:,avdLossS]
+    outArr[:,6] = avgedinput[:,avdVoltA]
+    outArr[:,7] = avgedinput[:,avdVoltS]
+    outArr[:,8] = avgedinput[:,avdTimeA]
+    outArr[:,9] = avgedinput[:,avdTimeS]
+    outArr[:,10] = freqOmegaAvg
+    outArr[:,11] = capFarAvg
+    outArr[:,12] = resistAvg
+    outArr[:,13] = resistStd
+    outArr[:,14] = ImpedanceRealAvg
+    outArr[:,15] = ImpedanceRealStd
+    outArr[:,16] = ImpedanceImagAvg
+    outArr[:,17] = ImpedanceImagStd
+    outArr[:,18] = ImpedanceMagAvg
+    outArr[:,19] = ImpedanceMagStd
     
-    # in case you want to graph these, uncomment this
-    #u_test1 = np.linspace(par0[1]-par0[2]**0.5, par0[1]+par0[2]**0.5)
-    #y_test1 = model(par0, u_test)
-    #u_test = np.linspace(res.x[1]-res.x[2]**0.5, res.x[1]+res.x[2]**0.5)
-    #y_test = model(res.x, u_test)
-    #plt.plot(ImpedanceRealAvg, ImpedanceImagAvg, 'o', markersize=4, label='data')
-    #plt.plot(u_test1, y_test1, label='initial model')
-    #plt.plot(u_test, y_test, label='fitted model')
-    #plt.xlabel("RealZ")
-    #plt.ylabel("ImagZ")
-    #plt.legend(loc='lower right')
-    #plt.show()
+    header = ' Frequency Ave \t Frequency Std \t Capacitance Ave \t Capacitance Std \t Loss Ave \t Loss Std \t Voltage Ave \t Voltage Std \t Time Ave \t Time Std \t Frequency Ave \t Capacitance Ave \t Resistance Ave \t Resistance Std \t ReZ Ave \t ReZ Std \t ImZ Ave \t ImZ Std \t MagZ Ave \t Magz Std \n  Hz \t Hz \t pF \t pF \t tand \t tand \t V \t V \t s \t s \t rad s-1 \t F \t Ohm \t Ohm \t Ohm \t Ohm \t Ohm \t Ohm \t Ohm \t Ohm '
+
+    np.savetxt(fOutname, outArr,delimiter='\t',header=header)
+
+    
+    
+    
+    
+    
+     
+    
+# in case you want to graph these, uncomment this
+#import matplotlib.pyplot as plt
+#u_test1 = np.linspace(par0[1]-par0[2]**0.5, par0[1]+par0[2]**0.5)
+#y_test1 = model(par0, u_test)
+#u_test = np.linspace(res.x[1]-res.x[2]**0.5, res.x[1]+res.x[2]**0.5)
+#y_test = model(res.x, u_test)
+#plt.plot(ImpedanceRealAvg, ImpedanceImagAvg, 'o', markersize=4, label='data')
+#plt.plot(u_test1, y_test1, label='initial model')
+#plt.plot(u_test, y_test, label='fitted model')
+#plt.xlabel("RealZ")
+#plt.ylabel("ImagZ")
+#plt.legend(loc='lower right')
+#plt.show()
 
 
 
