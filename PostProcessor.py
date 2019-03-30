@@ -1,7 +1,11 @@
-#	The function of this program is to take as input file the files produced by the labview program designed to interface with the AH2700 capacitance bridge (tab separated, row one and two as header and unit, respectively, and 5 columns ('frequency','capacitance', 'loss', 'voltage', and 'time') and applies a fitting function to the data
-#   The resulting fit data is output into a new file (tab separated) of format TBD
+#	The function of this program is to take as input file the files produced by the labview program designed to interface with the AH2700 capacitance bridge (tab separated, row one and two as header and unit, respectively, and 5 columns ('frequency','capacitance', 'loss', 'voltage', and 'time') and applies a fitting function to the data to extract the desired data as requested by Brent and Neelam
+#   First however, for consistency the data is "massaged" according to Data Massager.py (by brent) where any data points that are taken at the same frequency are averaged together
+#   Next we convert from the machine units of freq, cap, loss, etc to those we need for fitting, Real and Imaginary Impedance
+#   finally we fit the resulting RealZ vs ImagZ to a semi circle using scippy optimize
+#   The resulting fit data is output into a new line appended onto the file "Results.txt" which will be created if it doesnt exist
+#   The transformed input data is output into a new file called 'OUTPUT'+input_file_name in the Output folder, tab separated format of 20 columns where the first 10 columns are the average and standard deviation of the original input columns, and the next 2 are unit changes of the input, then the last 8 are the average and standard deviation of the calculated resistance, real/imaginary/ and magnitude of the impedance
 
-import argparse
+
 import numpy as np
 import datetime
 from scipy.optimize import least_squares
@@ -29,12 +33,13 @@ if not os.path.isfile(pathResults):
         file.write(fileUnits)
 
 # open the input directory and grab each .txt file
+#       Note: we assume eveything in the directory is of the right format, no training wheels for now
 inputfiles = [i for i in os.listdir(pathIn) if i.endswith("txt")]
 
 for fstring in inputfiles:
 
-    # Step Zero: define the column names <-> indices as semi constants for later
-
+    # Step Zero: define the column names <-> indices as semi constants for later_______________________________________________________
+    #__________________________________________________________________________________________________________________________________
     inFreq = 0      
     inCapPF = 1     # in the input array the CAPacitance (in PicoFarads) is in column 1
     inLoss = 2
@@ -54,9 +59,7 @@ for fstring in inputfiles:
     
     
     # Step One: find an input file name somehow__________________________________________________________________________________________
-    
-    # The File name hardcoded (for testing)
-    #fname = "C:\\Users\\gfirest\\Documents\\GitHub\\Cap-bridge-analysis\\testdata\\2700A S1 NtN1 50 After silane treatment 1 Bare Electrode R1 120oC Heating 02-09-2019.txt"
+    #__________________________________________________________________________________________________________________________________
     fname = pathIn+fstring
     fOutname = pathOut+'OUTPUT '+fstring
     
@@ -65,31 +68,33 @@ for fstring in inputfiles:
         continue
     
     # Step Two: read the file into a numpy array_________________________________________________________________________________________
+    #__________________________________________________________________________________________________________________________________
     
-    # quite possibly the worst converter function ever made. decodes the timestamp format from labview to unix time in seconds
-    # assumes the exact format '03-18-2019-13:34:11' with that extra dash
-    convertr = lambda s: float(datetime.datetime(int(s.decode().split('-')[2]),int(s.decode().split('-')[0]),int(s.decode().split('-')[1]),int(s.decode().split('-')[3].split(':')[0]),int(s.decode().split('-')[3].split(':')[1]),int(s.decode().split('-')[3].split(':')[2])).timestamp())
     
-    #whomp i already found a better way
+    # we need a converter to read the wacky timestamp that Labview outputs
     convertp = lambda s: float(datetime.datetime.strptime( s.decode(), "%m-%d-%Y-%H:%M:%S").timestamp())
-    
-    inputarray = np.loadtxt(fname, skiprows=2, converters={inTime : convertp}) # first two rows are headers and never change, so we skip them.
+    # first two rows are headers and never change, so we skip them, since we think we know what the column layout will be anyways
+    inputarray = np.loadtxt(fname, skiprows=2, converters={inTime : convertp}) 
     
     # Step Three: ''massage'' the data as Brent calls it________________________________________________________________________________
+    #__________________________________________________________________________________________________________________________________
+    
     #       in this step we take the input data and potentially average all the input data at each frequency
     
     # avgedinput will give an array twice as wide of [avg] concat to [std] 
     avgedinput = np.vstack([np.concatenate([inputarray[inputarray[:,inFreq] == freq].mean(0),inputarray[inputarray[:,inFreq] == freq].std(0)],0) for freq in set(inputarray[:,inFreq])])
     
-    
+    #       Then we calculate some new numbers from the averaged (and unaverraged data, though we dont use it ever?)
+    Averaged = True
     # if NOT averaged
-    freqOmega = inputarray[:,inFreq]*2*np.pi
-    capFar = inputarray[:,inCapPF]*10**(-12)
+    if (not Averaged):
+        freqOmega = inputarray[:,inFreq]*2*np.pi
+        capFar = inputarray[:,inCapPF]*10**(-12)
     
-    resist = 1 / (freqOmega * capFar * inputarray[:,inLoss])
-    ImpedanceReal = resist/(1+capFar**2*resist**2*freqOmega**2)
-    ImpedanceImag = (capFar*resist**2*freqOmega)/(1+capFar**2*resist**2*freqOmega**2)
-    ImpedanceMag = (ImpedanceReal**2+ImpedanceImag**2)**.5
+        resist = 1 / (freqOmega * capFar * inputarray[:,inLoss])
+        ImpedanceReal = resist/(1+capFar**2*resist**2*freqOmega**2)
+        ImpedanceImag = (capFar*resist**2*freqOmega)/(1+capFar**2*resist**2*freqOmega**2)
+        ImpedanceMag = (ImpedanceReal**2+ImpedanceImag**2)**.5
     
     # if YES averaged
     freqOmegaAvg = avgedinput[:,avdFreqA]*2*np.pi
@@ -109,7 +114,9 @@ for fstring in inputfiles:
     ImpedanceMagStd = ((ImpedanceImagStd*ImpedanceImagAvg**2)/(ImpedanceImagAvg**2+ImpedanceRealAvg**2)+(ImpedanceRealStd**2*ImpedanceRealAvg**2)/(ImpedanceImagAvg**2+ImpedanceRealAvg**2))**0.5
     
     # Step Four we now want to estimate the initial parameters of the circle from just the first 3 points._______________________________
+    #__________________________________________________________________________________________________________________________________
     
+    # grab three (x,y) points (i chose the first last and median for simpllicity. i recommend keeping the first and last, but you can change the middle one to anything, it doesnt really matter)
     xin3 = np.array([1,2,3], dtype=np.float64)
     xin3[0] = np.max(ImpedanceRealAvg)
     xin3[1] = np.median(ImpedanceRealAvg)
@@ -120,6 +127,7 @@ for fstring in inputfiles:
     yin3[1] = ImpedanceImagAvg[np.where(ImpedanceRealAvg==np.median(ImpedanceRealAvg))[0][0]]
     yin3[2] = ImpedanceImagAvg[np.argmin(ImpedanceRealAvg)]
     
+    # define a numpy vector to hold the three parameters y0,x0,and r2
     par0 = np.array([1,2,3], dtype=np.float64)
     
         # y0 initial guess
@@ -130,7 +138,9 @@ for fstring in inputfiles:
     par0[2] = (-par0[1] + xin3[0])**2 + (-par0[0] + yin3[0])**2
     
     # Step Five we want to create the various functions to pass into scipy adapted from__________________________________________________ https://docs.scipy.org/doc/scipy/reference/tutorial/optimize.html________________________________________________________________________
+    #__________________________________________________________________________________________________________________________________
     
+    # we fit with to a semi circle with offset center at x0,y0 and a radius equal to sqrt(r2) (calculating r2 instead of r is vestigial from brent)
     def model(x, u):
         return x[0] + (-(u - x[1])**2 + x[2])**0.5
     
@@ -152,8 +162,9 @@ for fstring in inputfiles:
     cond = 1/(res.x[1]+(res.x[2]-res.x[0]**2)**.5)
     dcond = ' '
     
-    # Step Six, format everything to do the outputting
-    # First we format to output the results
+    # Step Six, format everything to do the outputting_________________________________________________________________________________
+    #__________________________________________________________________________________________________________________________________
+    # First we format to output the results to the Results.txt file
     outRes = [' ']*(len(res.x)+len(pcov)+5)
     outRes[0] = fname.rsplit('\\',1)[1]
     outRes[1:6:2] = [str(i) for i in res.x]
@@ -165,7 +176,7 @@ for fstring in inputfiles:
     with open(pathResults, "a") as results:
         results.write(" \t ".join(outRes)+'\n')
         
-    #  then we output the modified input file (with averages calculated)
+    #  then we output the modified input file (with averages calculated) into the Output folder
     outArr = np.empty((len(freqOmegaAvg),20))
     outArr[:,0] = avgedinput[:,avdFreqA]
     outArr[:,1] = avgedinput[:,avdFreqS]
@@ -193,7 +204,7 @@ for fstring in inputfiles:
     np.savetxt(fOutname, outArr,delimiter='\t',header=header)
 
     
-    
+    # and thats it!
     
     
     
