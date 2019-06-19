@@ -67,22 +67,34 @@ for fstring in inputfiles:
     if os.path.isfile(fOutname):
         continue
     
-    # Step Two: read the file into a numpy array_________________________________________________________________________________________
-    #__________________________________________________________________________________________________________________________________
+    # Step Two: read the file into a numpy array_And do some preprocessing:_____
+    #_________________________________a) get rid of nan rows____________________
+    #_________________________________b) sort rows by frequency ________________
     
     
     # we need a converter to read the wacky timestamp that Labview outputs
-    convertp = lambda s: float(datetime.datetime.strptime( s.decode(), "%m-%d-%Y-%H:%M:%S").timestamp())
+    def convertb(s):
+        try:
+            return float(datetime.datetime.strptime( s.decode(), "%m-%d-%Y-%H:%M:%S").timestamp())
+        except ValueError:  # in case seconds dont get printed? that never came up for me
+            return float(datetime.datetime.strptime( s.decode(), "%m-%d-%Y-%H:%M").timestamp())
+    convertp = lambda s: convertb(s)
     # first two rows are headers and never change, so we skip them, since we think we know what the column layout will be anyways
-    inputarray = np.loadtxt(fname, skiprows=2, converters={inTime : convertp}) 
+    
+    #inputarray = np.loadtxt(fname, skiprows=2, converters={inTime : convertp}) 
+            # UGH we need to deal with missing numbers, so loadtxt is out, and genfromtxt is in
+    # missing values become NaN
+    inputrawarray = np.genfromtxt(fname, skip_header=2, delimiter="\t" ,converters={inTime : convertp}) 
+    # remove those rows
+    inputarray = inputrawarray[~np.isnan(inputrawarray).any(axis=1)] 
+    # then sort it since neelam wants it sorted and its easiest to do it here so that avg input is sorted also (not sure if this is guaranteed)
+    inputarray.sort(axis=0) 
     
     # Step Three: ''massage'' the data as Brent calls it________________________________________________________________________________
     #__________________________________________________________________________________________________________________________________
-    
-    #       in this step we take the input data and potentially average all the input data at each frequency
-    
+    #       in this step we take the input data and potentially average all the input data at each frequency 
     # avgedinput will give an array twice as wide of [avg] concat to [std] 
-    avgedinput = np.vstack([np.concatenate([inputarray[inputarray[:,inFreq] == freq].mean(0),inputarray[inputarray[:,inFreq] == freq].std(0)],0) for freq in set(inputarray[:,inFreq])])
+    avgedinput = np.vstack([np.concatenate([inputarray[inputarray[:,inFreq] == freq].mean(0),inputarray[inputarray[:,inFreq] == freq].std(0)],0) for freq in dict.fromkeys(inputarray[:,inFreq])])
     
     #       Then we calculate some new numbers from the averaged (and unaverraged data, though we dont use it ever?)
     Averaged = True
@@ -118,14 +130,14 @@ for fstring in inputfiles:
     
     # grab three (x,y) points (i chose the first last and median for simpllicity. i recommend keeping the first and last, but you can change the middle one to anything, it doesnt really matter)
     xin3 = np.array([1,2,3], dtype=np.float64)
-    xin3[0] = np.max(ImpedanceRealAvg)
-    xin3[1] = np.median(ImpedanceRealAvg)
-    xin3[2] = np.min(ImpedanceRealAvg)
+    xin3[0] = ImpedanceRealAvg[0]
+    xin3[1] = ImpedanceRealAvg[int(len(ImpedanceRealAvg)/2)]
+    xin3[2] = ImpedanceRealAvg[-1]
     
     yin3 = np.array([1,2,3], dtype=np.float64)
-    yin3[0] = ImpedanceImagAvg[np.argmax(ImpedanceRealAvg)]
-    yin3[1] = ImpedanceImagAvg[np.where(ImpedanceRealAvg==np.median(ImpedanceRealAvg))[0][0]]
-    yin3[2] = ImpedanceImagAvg[np.argmin(ImpedanceRealAvg)]
+    yin3[0] = ImpedanceImagAvg[0]
+    yin3[1] = ImpedanceImagAvg[int(len(ImpedanceRealAvg)/2)]
+    yin3[2] = ImpedanceImagAvg[-1]
     
     # define a numpy vector to hold the three parameters y0,x0,and r2
     par0 = np.array([1,2,3], dtype=np.float64)
@@ -157,7 +169,7 @@ for fstring in inputfiles:
     #u = ImpedanceRealAvg
     #y = ImpedanceImagAvg
     #x0 = par0
-    res = least_squares(fun, par0, jac=jac, args=(ImpedanceRealAvg, ImpedanceImagAvg), verbose=0) # this does the actual fitting
+    res = least_squares(fun, par0, jac=jac, method='lm', args=(ImpedanceRealAvg, ImpedanceImagAvg), verbose=0) # this does the actual fitting
     pcov = [' ']*(len(res.x)) 
     cond = 1/(res.x[1]+(res.x[2]-res.x[0]**2)**.5)
     dcond = ' '
@@ -211,18 +223,18 @@ for fstring in inputfiles:
      
     
 # in case you want to graph these, uncomment this
-#import matplotlib.pyplot as plt
-#u_test1 = np.linspace(par0[1]-par0[2]**0.5, par0[1]+par0[2]**0.5)
-#y_test1 = model(par0, u_test)
-#u_test = np.linspace(res.x[1]-res.x[2]**0.5, res.x[1]+res.x[2]**0.5)
-#y_test = model(res.x, u_test)
-#plt.plot(ImpedanceRealAvg, ImpedanceImagAvg, 'o', markersize=4, label='data')
-#plt.plot(u_test1, y_test1, label='initial model')
-#plt.plot(u_test, y_test, label='fitted model')
-#plt.xlabel("RealZ")
-#plt.ylabel("ImagZ")
-#plt.legend(loc='lower right')
-#plt.show()
+import matplotlib.pyplot as plt
+u_test1 = np.linspace(par0[1]-par0[2]**0.5, par0[1]+par0[2]**0.5)
+y_test1 = model(par0, u_test1)
+u_test = np.linspace(res.x[1]-res.x[2]**0.5, res.x[1]+res.x[2]**0.5)
+y_test = model(res.x, u_test)
+plt.plot(ImpedanceRealAvg, ImpedanceImagAvg, 'o', markersize=4, label='data')
+plt.plot(u_test1, y_test1, label='initial model')
+plt.plot(u_test, y_test, label='fitted model')
+plt.xlabel("RealZ")
+plt.ylabel("ImagZ")
+plt.legend()
+plt.show()
 
 
 
