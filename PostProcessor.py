@@ -86,9 +86,9 @@ for fstring in inputfiles:
     # missing values become NaN
     inputrawarray = np.genfromtxt(fname, skip_header=2, delimiter="\t" ,converters={inTime : convertp}) 
     # remove those rows
-    inputarray = inputrawarray[~np.isnan(inputrawarray).any(axis=1)] 
+    inputarrayuns = inputrawarray[~np.isnan(inputrawarray).any(axis=1)] 
     # then sort it since neelam wants it sorted and its easiest to do it here so that avg input is sorted also (not sure if this is guaranteed)
-    inputarray.sort(axis=0) 
+    inputarray = inputarrayuns[inputarrayuns[:,0].argsort()] # 0 is the 1st column, change to sort by other columns
     
     # Step Three: ''massage'' the data as Brent calls it________________________________________________________________________________
     #__________________________________________________________________________________________________________________________________
@@ -223,18 +223,18 @@ for fstring in inputfiles:
      
     
 # in case you want to graph these, uncomment this
-import matplotlib.pyplot as plt
-u_test1 = np.linspace(par0[1]-par0[2]**0.5, par0[1]+par0[2]**0.5)
-y_test1 = model(par0, u_test1)
-u_test = np.linspace(res.x[1]-res.x[2]**0.5, res.x[1]+res.x[2]**0.5)
-y_test = model(res.x, u_test)
-plt.plot(ImpedanceRealAvg, ImpedanceImagAvg, 'o', markersize=4, label='data')
-plt.plot(u_test1, y_test1, label='initial model')
-plt.plot(u_test, y_test, label='fitted model')
-plt.xlabel("RealZ")
-plt.ylabel("ImagZ")
-plt.legend()
-plt.show()
+#import matplotlib.pyplot as plt
+#u_test1 = np.linspace(par0[1]-par0[2]**0.5, par0[1]+par0[2]**0.5)
+#y_test1 = model(par0, u_test1)
+#u_test = np.linspace(res.x[1]-res.x[2]**0.5, res.x[1]+res.x[2]**0.5)
+#y_test = model(res.x, u_test)
+#plt.plot(ImpedanceRealAvg, ImpedanceImagAvg, 'o', markersize=4, label='data')
+#plt.plot(u_test1, y_test1, label='initial model')
+#plt.plot(u_test, y_test, label='fitted model')
+#plt.xlabel("RealZ")
+#plt.ylabel("ImagZ")
+#plt.legend()
+#plt.show()
 
 
 
